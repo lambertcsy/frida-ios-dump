@@ -6,6 +6,8 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
+
+import platform
 import sys
 import codecs
 import frida
@@ -119,12 +121,13 @@ def on_message(message, data):
             with SCPClient(ssh.get_transport(), progress = progress, socket_timeout = 60) as scp:
                 scp.get(scp_from, scp_to)
 
-            chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(dump_path))
-            chmod_args = ('chmod', '655', chmod_dir)
-            try:
-                subprocess.check_call(chmod_args)
-            except subprocess.CalledProcessError as err:
-                print(err)
+            if platform.system() != "Windows":
+                chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(dump_path))
+                chmod_args = ('chmod', '655', chmod_dir)
+                try:
+                    subprocess.check_call(chmod_args)
+                except subprocess.CalledProcessError as err:
+                    print(err)
 
             index = origin_path.find('.app/')
             file_dict[os.path.basename(dump_path)] = origin_path[index + 5:]
@@ -137,12 +140,13 @@ def on_message(message, data):
             with SCPClient(ssh.get_transport(), progress = progress, socket_timeout = 60) as scp:
                 scp.get(scp_from, scp_to, recursive=True)
 
-            chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(app_path))
-            chmod_args = ('chmod', '755', chmod_dir)
-            try:
-                subprocess.check_call(chmod_args)
-            except subprocess.CalledProcessError as err:
-                print(err)
+            if platform.system() != "Windows":
+                chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(app_path))
+                chmod_args = ('chmod', '755', chmod_dir)
+                try:
+                    subprocess.check_call(chmod_args)
+                except subprocess.CalledProcessError as err:
+                    print(err)
 
             file_dict['app'] = os.path.basename(app_path)
 
@@ -301,6 +305,15 @@ if __name__ == '__main__':
     parser.add_argument('target', nargs='?', help='Bundle identifier or display name of the target app')
 
     args = parser.parse_args()
+
+    # ios的root用户调试专用参数
+    # args.ssh_host = "172.27.1.87"
+    # args.ssh_port = 22
+    # args.ssh_user = "root"
+    # args.ssh_password = "root"
+    ####################################
+    # args.target = "Cleanup"
+    # sys.argv[1:] = ["1"]
 
     exit_code = 0
     ssh = None
