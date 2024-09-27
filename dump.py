@@ -8,8 +8,11 @@ from __future__ import print_function
 from __future__ import unicode_literals
 
 import platform
+import stat
 import sys
 import codecs
+import zipfile
+
 import frida
 import threading
 import os
@@ -46,6 +49,22 @@ PAYLOAD_PATH = os.path.join(TEMP_DIR, PAYLOAD_DIR)
 file_dict = {}
 
 finished = threading.Event()
+
+
+def zip_directory(folder_path, zip_file_name):
+    # 创建一个 ZIP 文件
+    with zipfile.ZipFile(zip_file_name, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        # 获取根文件夹的名称
+        root_folder_name = os.path.basename(folder_path)
+        # 遍历指定目录及其所有子目录
+        for root, dirs, files in os.walk(folder_path):
+            for file in files:
+                # 获取文件的完整路径
+                file_path = os.path.join(root, file)
+                # 计算相对路径，确保根文件夹也被压缩
+                arcname = os.path.join(root_folder_name, os.path.relpath(file_path, start=folder_path))
+                # 将文件添加到 ZIP 文件中，使用相对路径
+                zipf.write(file_path, arcname)
 
 
 def get_usb_iphone():
@@ -87,13 +106,15 @@ def generate_ipa(path, display_name):
             if key != 'app':
                 shutil.move(from_dir, to_dir)
 
-        target_dir = './' + PAYLOAD_DIR
-        zip_args = ('zip', '-qr', os.path.join(os.getcwd(), ipa_filename), target_dir)
-        subprocess.check_call(zip_args, cwd=TEMP_DIR)
+        # target_dir = './' + PAYLOAD_DIR
+        # zip_args = ('zip', '-qr', os.path.join(os.getcwd(), ipa_filename), target_dir)
+        # subprocess.check_call(zip_args, cwd=TEMP_DIR)
+        zip_directory(path, os.path.join(os.getcwd(), ipa_filename))
         shutil.rmtree(PAYLOAD_PATH)
     except Exception as e:
         print(e)
         finished.set()
+
 
 def on_message(message, data):
     t = tqdm(unit='B',unit_scale=True,unit_divisor=1024,miniters=1)
@@ -121,13 +142,16 @@ def on_message(message, data):
             with SCPClient(ssh.get_transport(), progress = progress, socket_timeout = 60) as scp:
                 scp.get(scp_from, scp_to)
 
+            chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(dump_path))
             if platform.system() != "Windows":
-                chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(dump_path))
                 chmod_args = ('chmod', '655', chmod_dir)
                 try:
                     subprocess.check_call(chmod_args)
                 except subprocess.CalledProcessError as err:
                     print(err)
+            else:
+                # 这里给刚创建的文件夹777的权限
+                os.chmod(chmod_dir, stat.S_IRWXU + stat.S_IRWXG + stat.S_IRWXO)
 
             index = origin_path.find('.app/')
             file_dict[os.path.basename(dump_path)] = origin_path[index + 5:]
@@ -140,13 +164,16 @@ def on_message(message, data):
             with SCPClient(ssh.get_transport(), progress = progress, socket_timeout = 60) as scp:
                 scp.get(scp_from, scp_to, recursive=True)
 
+            chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(app_path))
             if platform.system() != "Windows":
-                chmod_dir = os.path.join(PAYLOAD_PATH, os.path.basename(app_path))
                 chmod_args = ('chmod', '755', chmod_dir)
                 try:
                     subprocess.check_call(chmod_args)
                 except subprocess.CalledProcessError as err:
                     print(err)
+            else:
+                # 这里给刚创建的文件夹777的权限
+                os.chmod(chmod_dir, stat.S_IRWXU + stat.S_IRWXG + stat.S_IRWXO)
 
             file_dict['app'] = os.path.basename(app_path)
 
